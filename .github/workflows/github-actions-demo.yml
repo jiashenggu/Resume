@@ -1,17 +1,60 @@
-name: GitHub Actions Demo
-on: [push]
+name: Build and Release LaTeX document
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+    - 'v*'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
 jobs:
-  Explore-GitHub-Actions:
+  build_release_latex:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
-      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
-      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
-      - name: Check out repository code
-        uses: actions/checkout@v3
-      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
-      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
-      - name: List files in the repository
+      - uses: actions/checkout@v2
+      
+      - name: Compile LaTeX document
+        uses: xu-cheng/latex-action@v2
+        with:
+          root_file: Résumé.tex
+          
+      - name: Stash PDF
         run: |
-          ls ${{ github.workspace }}
-      - run: echo "🍏 This job's status is ${{ job.status }}."
+          mv Résumé.pdf $HOME # cache the file
+          
+      - name: Create Branch
+        uses: peterjgrainger/action-create-branch@v2.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          branch: gh_actions_builds
+          
+      - name: Checkout gh_actions_builds Branch
+        uses: actions/checkout@v1
+        with:
+          ref: gh_actions_builds 
+          
+      - name: Commit PDF
+        run: |
+          git config --local user.email "984931887@qq.com"
+          git config --local user.name "jiashenggu"
+          mv $HOME/Résumé.pdf $(pwd) # bring it back 
+          git add -f Résumé.pdf
+          git commit -m "Updated by GitHub Action Automatically"
+          
+      - name: Push PDF
+        uses: ad-m/github-push-action@v0.5.0
+        with: 
+          branch: gh_actions_builds 
+          force: false
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+  
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: Résumé.pdf
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
